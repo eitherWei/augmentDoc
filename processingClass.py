@@ -2,11 +2,14 @@
 from getData import returnData
 import pandas as pd
 import re
+import numpy as np
 
 import networkx as nx
 
 from nltk.corpus import stopwords
 from nltk.corpus import wordnet as wn
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.cluster import KMeans
 
 stop = set(stopwords.words('english'))
 
@@ -130,6 +133,7 @@ class processingClass():
 
             self.augmentSents = augmentSents
 
+
         if aug == "synonym":
             print("process as synonym")
             print(len(self.testSet))
@@ -139,6 +143,9 @@ class processingClass():
             print("process as hypernym")
             print(len(self.testSet))
             self.add_hypernyms()
+
+        # make the sents NLTK friendly
+        self.stringifyText()
 
 
     def build_tokenizer(self):
@@ -162,6 +169,56 @@ class processingClass():
 
         return lambda doc: self.remove_stopwords(tokenise(preprocess((self.decode(doc)))))
 
+    def clusterMethod(self, cluster_list):
+
+        # method takes in classlist and extracts docs and labels for clustering
+        labels , docs = self.createListLabels(cluster_list)
+
+        # initilise sklearn classifier
+        vectoriser = TfidfVectorizer(max_df = 0.8, min_df = 0.2,
+                                        use_idf = True, ngram_range = (1,3))
+        # convert docs
+        matrix = vectoriser.fit_transform(docs)
+
+        km = KMeans(n_clusters = len(cluster_list))
+        km.fit(matrix)
+        clusters = km.labels_.tolist()
+
+
+
+        clusters = pd.DataFrame({"clusters" : clusters, "actual_labels" : labels})
+
+        pred = clusters.clusters.value_counts()
+
+        pred.sort_index(inplace = True)
+        cols = list(pred.index)
+
+        df = pd.DataFrame(index = cols, columns = cols)
+
+        for v in cols:
+            f = clusters[(clusters.clusters == v)]
+            act = f.actual_labels.value_counts()
+            act.sort_index(inplace = True)
+            df.iloc[v] = list(act)
+
+        
+        df['pred total'] = df.sum(axis= 1)
+        df.loc['actual total'] = df.sum(axis= 0).T
+
+        return df
+
+
+    def createListLabels(self, classList):
+        labels = []
+        docs = []
+
+        # loop over the classes and pull out information
+        for i in range(len(classList)):
+            docs.extend(classList[i].augmentSents)
+            labs =  np.array([i]*len(classList[i].augmentSents))
+            labels.extend(labs)
+
+        return labels , docs
 
     def constructGraph(self , limit = None, depth = 2 ):
         # limit is a variable that allows one take a slice of the data to allow for testing/training split
@@ -276,11 +333,6 @@ class processingClass():
         return result
 
 
-
-
-
-
-
     def returnUpprocessedData(self, filename):
         location = "data/" + filename + ".pkl"
         #location = "data/rugby_text.csv"
@@ -302,6 +354,20 @@ class processingClass():
 
     def selfie(self):
         return self
+
+    def stringifyText(self):
+
+        stringArray = []
+
+        for array in self.augmentSents:
+            stringy = ""
+            for word in array:
+                stringy = stringy + " " + word
+            stringArray.append(stringy)
+
+        self.augmentSents = stringArray
+
+
 
 
     def vectoriseData(self, process = False):

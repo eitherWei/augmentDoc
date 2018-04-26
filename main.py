@@ -3,13 +3,14 @@ from processingClass import *
 import time
 
 start = time.time()
-testSize = 101
+testSize = 100
 aug = "graph"
 #aug = "synonym"
 #aug = "hypernym"
 
 # list of threads
 data_list = ['red' , "rug", "ire", "pol", "wn"]
+#data_list = ['red', 'rug', 'ire']
 
 # initialise preprocessing class as pc
 allD = []
@@ -30,12 +31,16 @@ for i in range(len(classList)):
     # vectorise and process the data
     allD[i].vectoriseData()
 
+    # split the data into training and testing
     allD[i].returnTestData()
 
+    # perform the required augmentation
     allD[i].augmentTestSet(aug)
-    print(allD[i].augmentSents[0])
 
 
+clusters = pc.clusterMethod(allD)
+
+print(clusters)
 
 
 
