@@ -1,24 +1,4 @@
-Skip to content
 
-Search or jump to…
-
-Pull requests
-Issues
-Marketplace
-Explore
-
-@eitherWei Sign out
- The password you provided is weak and can be easily guessed. To increase your security, please change your password as soon as possible.
-
-Read our documentation on safer password practices.
-
-0
-0 0 eitherWei/augmentDoc
- Code  Issues 0  Pull requests 0  Projects 0  Wiki  Insights  Settings
-augmentDoc/main.py
-@eitherWei eitherWei Add files via upload
-7b5111d on 26 Apr 2018
-118 lines (83 sloc)  2.27 KB
 
 
 from processingClass import *
@@ -123,15 +103,3 @@ print(count)
 
 
 print((time.time() - start)/60)
-© 2019 GitHub, Inc.
-Terms
-Privacy
-Security
-Status
-Help
-Contact GitHub
-Pricing
-API
-Training
-Blog
-About
