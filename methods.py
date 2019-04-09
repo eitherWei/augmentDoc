@@ -15,7 +15,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
 
 # removing unwanted symbols from document
-token_pattern = r"(?u)\b\w\w+\b"
+token_pattern = '^([a-zA-Z]+|\d+|\W)$'
 stop = set(stopwords.words('english'))
 
 ## tokenise word vectors
@@ -34,10 +34,14 @@ def build_tokenizer(doc):
     doc = re.sub(r"www\S+", "", doc, flags=re.MULTILINE)
 
 
-    tokenizer = RegexpTokenizer(token_pattern)
-    doc  = tokenizer.tokenize(doc)
-
-    return doc
+    #tokenizer = RegexpTokenizer(token_pattern)
+    #doc  = tokenizer.tokenize(doc)
+	
+    doctored = []
+    for token in doc.split(" "):
+        token  = re.sub('[\W_]+', '', token)
+        doctored.append(token)
+    return doctored
 
 
 def sanitiseData(liste):
@@ -111,7 +115,7 @@ def plotArray(array, depth, g):
 
     return g , array
 
-def plotCorpusToDiGraph(corpus, title , failSafe = True):
+def plotCorpusToDiGraph(corpus, title , failSafe = False):
 
     # check if it is already created
     try:
@@ -121,15 +125,10 @@ def plotCorpusToDiGraph(corpus, title , failSafe = True):
 
         print("checking if graph exists ....")
         graph = nx.read_gpickle(title)
-        print()
 
     except:
         print("FAILED to load graph")
         graph = nx.DiGraph()
-        print("type of corpus")
-        print(type(corpus))
-        print("corpus length")
-        print(len(corpus))
         for c in corpus:
             graph , _ = plotArray(c, 2, graph)
 
@@ -161,16 +160,22 @@ def stringifyText(augmentSents):
 
         return stringArray
 
-def clusterMethod(cluster_list, labels):
+def clusterMethod(cluster_list, labels, min_df):
 
     # initilise sklearn classifier
-    vectoriser = TfidfVectorizer(max_df = 0.9, min_df = 0.1,
-                                        use_idf = True, ngram_range = (1,3))
+    vectoriser = TfidfVectorizer(max_df = 0.9, min_df = min_df,
+                                        use_idf = False)
     # convert docs
 
     # have to stringify docs to satisfy sklearn format
     docs = stringifyText(cluster_list)
     matrix = vectoriser.fit_transform(docs)
+    terms = vectoriser.get_feature_names()
+	
+    print(terms)
+
+
+
 
     km = KMeans(n_clusters = 2)
     km.fit(matrix)
@@ -205,70 +210,7 @@ def clusterMethod(cluster_list, labels):
     #df['actual_labels'] = list(f.actual_labels)
     df['pred total'] = df.sum(axis= 1)
     df.loc['actual total'] = df.sum(axis= 0).T
+    
 
 
-
-    return df , km.labels_.tolist()
-
-
-def extractAlternateGraph(pkl_title):
-    print("opening: " + pkl_title)
-    df_alter_thread = pd.read_pickle(pkl_title)
-    print("shape: " + str(df_alter_thread.shape))
-    print("sanitising " + pkl_title)
-    doc_alter = sanitiseData(df_alter_thread.body)
-    print("Graphing " + pkl_title)
-
-    saveGraphTitle = "graph_" + pkl_title
-    G = plotCorpusToDiGraph(doc_alter, saveGraphTitle)
-    return G
-
-def createGraphDirectFromArray(df, pkl_title):
-    doc_alter = sanitiseData(df.body)
-    print("Graphing from direct list input")
-
-    saveGraphTitle = "graph_" + pkl_title
-    G = plotCorpusToDiGraph(doc_alter, saveGraphTitle)
-    return G
-
-
-def augmentTerm(term, graph ):
-        # takes as argument term and finds graph compatriots
-        lst = list(graph.edges(term, data = True))
-        # orders list and returns top value
-        lst.sort(key = lambda x: x[2]['weight'], reverse = True)
-        #print(lst)
-        # result is an ordered tuple set ((term, correlate, weight)...)
-        # return top valued correlate
-        if(len(lst) > 0):
-            return [term, lst[0][1]]
-
-        return ([term])
-
-def augmentArray(array, graph):
-        returnArray = []
-        for a in array:
-            if graph.has_node(a):
-                term = augmentTerm(a, graph)
-                returnArray.extend(term)
-            else:
-                #print("term missing from graph")
-                returnArray.extend([a])
-
-        return returnArray
-
-
-def augmentDocs(corpus, graph):
-    print(" -- Augmenting Corpus -- ")
-    augment_corpus = []
-    length_original = []
-    length_augmend = []
-    for c in corpus:
-        length_original.append(len(c))
-        augment_array = augmentArray(c, graph)
-        augment_corpus.append(augment_array)
-        length_augmend.append(len(augment_array))
-
-    df = pd.DataFrame({"org" : length_original, "aug" : length_augmend})
-
-    return augment_corpus , df
+    return df , km.labels_.tolist() , terms
