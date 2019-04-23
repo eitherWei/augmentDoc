@@ -13,9 +13,13 @@ from nltk.corpus import stopwords
 import networkx as nx
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
+from sklearn.metrics import f1_score , accuracy_score
+
+# turning off the slicing warning
+pd.set_option('mode.chained_assignment', None)
 
 # removing unwanted symbols from document
-token_pattern = '^([a-zA-Z]+|\d+|\W)$'
+token_pattern = r"(?u)\b\w\w+\b"
 stop = set(stopwords.words('english'))
 
 ## tokenise word vectors
@@ -34,14 +38,10 @@ def build_tokenizer(doc):
     doc = re.sub(r"www\S+", "", doc, flags=re.MULTILINE)
 
 
-    #tokenizer = RegexpTokenizer(token_pattern)
-    #doc  = tokenizer.tokenize(doc)
-	
-    doctored = []
-    for token in doc.split(" "):
-        token  = re.sub('[\W_]+', '', token)
-        doctored.append(token)
-    return doctored
+    tokenizer = RegexpTokenizer(token_pattern)
+    doc  = tokenizer.tokenize(doc)
+
+    return doc
 
 
 def sanitiseData(liste):
@@ -57,7 +57,7 @@ def sanitiseData(liste):
     return Docs
 
 def plotLenList(lenList, title = None, xlabel = None, ylabel = "Density"):
-    lenList.sort()
+    #lenList.sort()
 
     #sns.distplot(lenList[10000: 60000])
     sns.distplot(lenList)
@@ -110,13 +110,13 @@ def plotArray(array, depth, g):
             moveCounter = counter
             dummyDepth = depth
         else:
-            # chop array to vacilitate recursion
+            # chop array to facilitate recursion
             array = array[counter - 1:]
 
     return g , array
 
-def plotCorpusToDiGraph(corpus, title , failSafe = False):
-
+def plotCorpusToDiGraph(corpus, title , graph = nx.DiGraph(), failSafe = True, level = 2):
+    ''' setting graph to default digraph unless otherwise stated '''
     # check if it is already created
     try:
         if (failSafe):
@@ -125,12 +125,18 @@ def plotCorpusToDiGraph(corpus, title , failSafe = False):
 
         print("checking if graph exists ....")
         graph = nx.read_gpickle(title)
+        print()
 
     except:
         print("FAILED to load graph")
-        graph = nx.DiGraph()
+
+        print("type of corpus")
+        print(type(corpus))
+        print("corpus length")
+        print(len(corpus))
+        print("Is the graph directed ? - " + str(nx.is_directed(graph)))
         for c in corpus:
-            graph , _ = plotArray(c, 2, graph)
+            graph , _ = plotArray(c, level, graph)
 
         nx.write_gpickle(graph, title)
 
@@ -160,30 +166,35 @@ def stringifyText(augmentSents):
 
         return stringArray
 
+def accuracyEval(clusters , labels):
+
+    accuracy_score_1 = accuracy_score(labels , list(clusters.clusters), normalize=True)
+
+    clusters = clusters.replace({0:1, 1:0})
+
+    accuracy_score_2 = accuracy_score(labels , list(clusters.clusters), normalize=True)
+
+    if accuracy_score_1 > accuracy_score_2:
+        clusters = clusters.replace({0:1, 1:0})
+        return accuracy_score_1 , clusters
+
+
+    return accuracy_score_2 , clusters
+
 def clusterMethod(cluster_list, labels, min_df):
 
     # initilise sklearn classifier
     vectoriser = TfidfVectorizer(max_df = 0.9, min_df = min_df,
-                                        use_idf = False)
+                                                use_idf = False)
     # convert docs
 
     # have to stringify docs to satisfy sklearn format
     docs = stringifyText(cluster_list)
     matrix = vectoriser.fit_transform(docs)
-    terms = vectoriser.get_feature_names()
-	
-    print(terms)
-
-
-
 
     km = KMeans(n_clusters = 2)
     km.fit(matrix)
     clusters = km.labels_.tolist()
-
-    print(len(clusters))
-    print(len(labels))
-
 
     clusters = pd.DataFrame({"clusters" : clusters, "actual_labels" : labels})
 
@@ -197,6 +208,11 @@ def clusterMethod(cluster_list, labels, min_df):
 
     df = pd.DataFrame(index = cols, columns = cols)
 
+    terms = vectoriser.get_feature_names()
+    print("import terms: " + str(len(terms)))
+    print(terms)
+
+
 
     for v in cols:
         f = clusters[(clusters.clusters == v)]
@@ -204,13 +220,86 @@ def clusterMethod(cluster_list, labels, min_df):
         act.sort_index(inplace = True)
         df.iloc[v] = list(act)
 
-    print('variables data')
-    print(df.shape)
-    print(len(f.actual_labels))
     #df['actual_labels'] = list(f.actual_labels)
     df['pred total'] = df.sum(axis= 1)
     df.loc['actual total'] = df.sum(axis= 0).T
-    
+
+    acc , clusters = accuracyEval(clusters, labels)
+
+    print("The accuracy for this approach: " + str(acc))
+    print("return type extended to includes")
+
+    return acc , terms , clusters
 
 
-    return df , km.labels_.tolist() , terms
+def extractAlternateGraph(pkl_title):
+    print("opening: " + pkl_title)
+    df_alter_thread = pd.read_pickle(pkl_title)
+    print("shape: " + str(df_alter_thread.shape))
+    print("sanitising " + pkl_title)
+    doc_alter = sanitiseData(df_alter_thread.body)
+    print("Graphing " + pkl_title)
+
+    saveGraphTitle =   pkl_title
+    G = plotCorpusToDiGraph(doc_alter, saveGraphTitle)
+    return G
+
+def createGraphDirectFromArray(df, pkl_title):
+    doc_alter = sanitiseData(df.body)
+    print("Graphing from direct list input")
+
+    saveGraphTitle = "graph_" + pkl_title
+    G = plotCorpusToDiGraph(doc_alter, saveGraphTitle)
+    return G
+
+
+def augmentTerm(term, graph ):
+        # takes as argument term and finds graph compatriots
+        lst = list(graph.edges(term, data = True))
+        # orders list and returns top value
+        lst.sort(key = lambda x: x[2]['weight'], reverse = True)
+        #print(lst)
+        # result is an ordered tuple set ((term, correlate, weight)...)
+        # return top valued correlate
+        if(len(lst) > 0):
+            return [term, lst[0][1]]
+
+        return ([term])
+
+def augmentArray(array, graph):
+        returnArray = []
+        for a in array:
+            if graph.has_node(a):
+                term = augmentTerm(a, graph)
+                returnArray.extend(term)
+            else:
+                #print("term missing from graph")
+                returnArray.append(a)
+
+        return returnArray
+
+
+def augmentDocs(corpus, graph):
+    print(" -- Augmenting Corpus -- ")
+    augment_corpus = []
+    #length_original = []
+    #length_augmend = []
+    for c in corpus:
+        #length_original.append(len(c))
+        augment_array = augmentArray(c, graph)
+        augment_corpus.append(augment_array)
+        #length_augmend.append(len(augment_array))
+
+    df = pd.DataFrame()
+
+    return augment_corpus , df
+
+
+def read_raw_pickle():
+    df = pd.read_pickle('poitics_mar.pkl')
+    print(df.head())
+    corpus = sanitiseData(df.body)
+    print(len(corpus))
+
+    df = pd.DataFrame({"corpus" : corpus})
+    df.to_pickle("data//sanitised_politics.pkl")
