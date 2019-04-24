@@ -134,9 +134,11 @@ def plotCorpusToDiGraph(corpus, title , graph = nx.DiGraph(), failSafe = True, l
         print(type(corpus))
         print("corpus length")
         print(len(corpus))
-        print("Is the graph directed ? - " + str(nx.is_directed(graph)))
         for c in corpus:
             graph , _ = plotArray(c, level, graph)
+
+        print("Is the graph directed ? - " + str(nx.is_directed(graph)))
+
 
         nx.write_gpickle(graph, title)
 
@@ -200,7 +202,6 @@ def clusterMethod(cluster_list, labels, min_df):
 
     pred = clusters.clusters.value_counts()
 
-    print(pred)
 
     pred.sort_index(inplace = True)
     cols = list(pred.index)
@@ -226,10 +227,11 @@ def clusterMethod(cluster_list, labels, min_df):
 
     acc , clusters = accuracyEval(clusters, labels)
 
+
     print("The accuracy for this approach: " + str(acc))
     print("return type extended to includes")
 
-    return acc , terms , clusters
+    return  terms , clusters
 
 
 def extractAlternateGraph(pkl_title):
